@@ -4,7 +4,8 @@
 // Modelo: gemini-1.5-flash
 // ============================================================
 
-import { GoogleGenerativeAI } from "@google/genai";
+import pkg from "@google/genai";
+const { GoogleGenerativeAI } = pkg;
 
 // ── Inicialización del cliente (una sola instancia, reutilizable) ──
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
