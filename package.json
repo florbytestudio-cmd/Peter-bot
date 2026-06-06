@@ -1,7 +1,7 @@
 {
   "name": "fernando-bot",
   "version": "1.0.0",
-  "description": "Asistente financiero Fernando — WhatsApp + Whisper + Gemini + Supabase",
+  "description": "Asistente financiero Fernando — WhatsApp + Whisper + OpenAI + Supabase",
   "type": "module",
   "main": "paso3_webhook.js",
   "scripts": {
@@ -9,10 +9,10 @@
     "dev":   "node --watch paso3_webhook.js"
   },
   "dependencies": {
-    "@google/genai":       "^0.7.0",
+    "openai":                "^4.47.0",
     "@supabase/supabase-js": "^2.43.0",
-    "axios":               "^1.7.2",
-    "express":             "^4.19.2",
-    "form-data":           "^4.0.0"
+    "axios":                 "^1.7.2",
+    "express":               "^4.19.2",
+    "form-data":             "^4.0.0"
   }
 }

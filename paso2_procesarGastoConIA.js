@@ -1,13 +1,12 @@
 // ============================================================
 // PASO 2: FUNCIÓN procesarGastoConIA(textoTranscribido)
-// Stack: Node.js + Google Gemini SDK (@google/genai v0.7+)
-// Modelo: gemini-2.0-flash
+// Stack: Node.js + OpenAI GPT-4o mini
 // ============================================================
 
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 
 // ── Inicialización del cliente ──
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ── Categorías válidas por entorno ──
 const CATEGORIAS = {
@@ -79,20 +78,36 @@ ESQUEMA JSON (sin movimiento financiero):
 
 const FEW_SHOT_EXAMPLES = [
   {
-    input:  "gasté cuatro mil quinientos pesos en cemento para la obra",
-    output: { monto: 4500, tipo: "EGRESO", concepto: "Compra de cemento", categoria: "Materiales", entorno: "Obra Majalca", confianza: 97, error: null }
+    role: "user",
+    content: "gasté cuatro mil quinientos pesos en cemento para la obra"
   },
   {
-    input:  "entró el pago del cliente de diseño, doce mil",
-    output: { monto: 12000, tipo: "INGRESO", concepto: "Pago cliente diseño", categoria: "Clientes", entorno: "Negocio", confianza: 95, error: null }
+    role: "assistant",
+    content: JSON.stringify({ monto: 4500, tipo: "EGRESO", concepto: "Compra de cemento", categoria: "Materiales", entorno: "Obra Majalca", confianza: 97, error: null })
   },
   {
-    input:  "ochocientos cincuenta en el súper",
-    output: { monto: 850, tipo: "EGRESO", concepto: "Compras supermercado", categoria: "Alimentación", entorno: "Personal", confianza: 92, error: null }
+    role: "user",
+    content: "entró el pago del cliente de diseño, doce mil"
   },
   {
-    input:  "hola cómo estás, qué buen día",
-    output: { monto: null, tipo: null, concepto: null, categoria: null, entorno: null, confianza: 0, error: "NO_TRANSACTION_FOUND" }
+    role: "assistant",
+    content: JSON.stringify({ monto: 12000, tipo: "INGRESO", concepto: "Pago cliente diseño", categoria: "Clientes", entorno: "Negocio", confianza: 95, error: null })
+  },
+  {
+    role: "user",
+    content: "ochocientos cincuenta en el súper"
+  },
+  {
+    role: "assistant",
+    content: JSON.stringify({ monto: 850, tipo: "EGRESO", concepto: "Compras supermercado", categoria: "Alimentación", entorno: "Personal", confianza: 92, error: null })
+  },
+  {
+    role: "user",
+    content: "hola cómo estás, qué buen día"
+  },
+  {
+    role: "assistant",
+    content: JSON.stringify({ monto: null, tipo: null, concepto: null, categoria: null, entorno: null, confianza: 0, error: "NO_TRANSACTION_FOUND" })
   }
 ];
 
@@ -111,45 +126,36 @@ export async function procesarGastoConIA(textoTranscribido) {
     throw new Error("procesarGastoConIA: texto demasiado corto para procesar.");
   }
 
-  // Construir historial few-shot
-  const contents = [];
-  for (const example of FEW_SHOT_EXAMPLES) {
-    contents.push({ role: "user",  parts: [{ text: example.input }] });
-    contents.push({ role: "model", parts: [{ text: JSON.stringify(example.output) }] });
-  }
-  contents.push({ role: "user", parts: [{ text: textoLimpio }] });
-
   const MAX_REINTENTOS = 2;
   let ultimoError = null;
 
   for (let intento = 1; intento <= MAX_REINTENTOS; intento++) {
     try {
-      console.log(`[Gemini] Intento ${intento} para: "${textoLimpio.substring(0, 60)}"`);
+      console.log(`[OpenAI] Intento ${intento} para: "${textoLimpio.substring(0, 60)}"`);
 
-      const response = await genAI.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          responseMimeType:  "application/json",
-          temperature:       0.1,
-          topP:              0.8,
-          maxOutputTokens:   512,
-        }
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.1,
+        max_tokens: 512,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          ...FEW_SHOT_EXAMPLES,
+          { role: "user", content: textoLimpio }
+        ]
       });
 
-      const rawText = response.text;
+      const rawText = response.choices[0].message.content;
 
       let parsed;
       try {
-        const jsonString = rawText.replace(/```json|```/g, "").trim();
-        parsed = JSON.parse(jsonString);
+        parsed = JSON.parse(rawText);
       } catch (parseError) {
-        throw new Error(`JSON inválido de Gemini: ${rawText}`);
+        throw new Error(`JSON inválido de OpenAI: ${rawText}`);
       }
 
       if (parsed.error === "NO_TRANSACTION_FOUND") {
-        console.log("[Gemini] No se detectó transacción financiera.");
+        console.log("[OpenAI] No se detectó transacción financiera.");
         return { success: false, razon: "NO_TRANSACTION_FOUND", textoOriginal: textoLimpio, datos: null };
       }
 
@@ -161,7 +167,7 @@ export async function procesarGastoConIA(textoTranscribido) {
       }
 
       if (parsed.monto === -1) {
-        throw new Error("Gemini no pudo identificar el monto.");
+        throw new Error("OpenAI no pudo identificar el monto.");
       }
 
       return {
@@ -180,7 +186,7 @@ export async function procesarGastoConIA(textoTranscribido) {
 
     } catch (err) {
       ultimoError = err;
-      console.warn(`[Gemini] Error en intento ${intento}: ${err.message}`);
+      console.warn(`[OpenAI] Error en intento ${intento}: ${err.message}`);
       if (intento < MAX_REINTENTOS) {
         await new Promise(resolve => setTimeout(resolve, intento * 1000));
       }
