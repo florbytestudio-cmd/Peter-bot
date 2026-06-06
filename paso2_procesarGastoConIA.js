@@ -1,7 +1,7 @@
 // ============================================================
 // PASO 2: FUNCIÓN procesarGastoConIA(textoTranscribido)
 // Stack: Node.js + Google Gemini SDK (@google/genai v0.7+)
-// Modelo: gemini-1.5-flash
+// Modelo: gemini-2.0-flash
 // ============================================================
 
 import { GoogleGenAI } from "@google/genai";
@@ -127,7 +127,7 @@ export async function procesarGastoConIA(textoTranscribido) {
       console.log(`[Gemini] Intento ${intento} para: "${textoLimpio.substring(0, 60)}"`);
 
       const response = await genAI.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         contents,
         config: {
           systemInstruction: SYSTEM_PROMPT,
