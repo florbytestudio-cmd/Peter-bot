@@ -1,7 +1,7 @@
 {
   "name": "fernando-bot",
   "version": "1.0.0",
-  "description": "Asistente financiero Fernando — WhatsApp + Whisper + OpenAI + Supabase",
+  "description": "Asistente financiero Fernando — Twilio WhatsApp + Whisper + OpenAI + Supabase",
   "type": "module",
   "main": "paso3_webhook.js",
   "scripts": {
@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.43.0",
     "axios":                 "^1.7.2",
     "express":               "^4.19.2",
-    "form-data":             "^4.0.0"
+    "form-data":             "^4.0.0",
+    "twilio":                "^5.0.0"
   }
 }
