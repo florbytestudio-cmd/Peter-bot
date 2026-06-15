@@ -8,6 +8,12 @@ import axios         from "axios";
 import FormData      from "form-data";
 import { createClient } from "@supabase/supabase-js";
 import { procesarGastoConIA } from "./ia.js";
+import express        from "express";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 
@@ -427,5 +433,26 @@ bot.on("message", async (msg) => {
     await bot.sendMessage(chatId, "❌ Ocurrió un error. Intenta de nuevo.");
   }
 });
+
+// ============================================================
+// SERVIDOR WEB (dashboard + healthcheck)
+// ============================================================
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/health", (_, res) => res.json({ status: "ok", bot: "Fernando v2.1" }));
+
+app.get("/dashboard", (_, res) => {
+  try {
+    const html = readFileSync(join(__dirname, "dashboard.html"), "utf-8");
+    res.setHeader("Content-Type", "text/html");
+    res.send(html);
+  } catch {
+    res.status(404).send("Dashboard no encontrado. Asegúrate de subir dashboard.html al repo.");
+  }
+});
+
+app.listen(PORT, () => console.log(`🌐 Servidor web en puerto ${PORT}`));
 
 console.log("🤖 Fernando Bot v2.1 (Telegram) iniciado...");
