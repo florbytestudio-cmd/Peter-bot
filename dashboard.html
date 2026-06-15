@@ -17,9 +17,9 @@
     --muted:    #666;
     --ingreso:  #22c55e;
     --egreso:   #f43f5e;
-    --personal: #818cf8;
-    --negocio:  #38bdf8;
-    --obra:     #fb923c;
+    --personal: #e879f9;
+    --negocio:  #2dd4bf;
+    --obra:     #facc15;
     --accent:   #a78bfa;
   }
 
@@ -437,7 +437,7 @@ function renderChart(data) {
   egr.forEach(r => { por[r.categoria] = (por[r.categoria] || 0) + parseFloat(r.monto); });
   const labels = Object.keys(por);
   const vals   = Object.values(por);
-  const colors = ["#818cf8","#38bdf8","#fb923c","#22c55e","#f43f5e","#a78bfa","#fbbf24","#34d399","#f472b6","#60a5fa"];
+  const colors = ["#f43f5e","#22c55e","#3b82f6","#f97316","#a78bfa","#06b6d4","#84cc16","#ec4899","#14b8a6","#6366f1"];
   const ctx = document.getElementById("chartCat").getContext("2d");
   if (chartInstance) chartInstance.destroy();
   if (!labels.length) return;

@@ -366,8 +366,10 @@ bot.onText(/\/resumen/, async (msg) => {
 
 bot.onText(/\/dashboard/, async (msg) => {
   if (!esAutorizado(msg.chat.id)) return;
-  const url = process.env.DASHBOARD_URL || "Próximamente";
-  await bot.sendMessage(msg.chat.id, `🌐 *Tu dashboard:*\n${url}`, { parse_mode: "Markdown" });
+  const railwayUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/dashboard`
+    : process.env.DASHBOARD_URL || "https://peter-bot-production.up.railway.app/dashboard";
+  await bot.sendMessage(msg.chat.id, `🌐 *Tu dashboard:*\n${railwayUrl}`, { parse_mode: "Markdown" });
 });
 
 // ============================================================

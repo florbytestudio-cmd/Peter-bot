@@ -7,9 +7,18 @@ import OpenAI from "openai";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const CATEGORIAS = {
-  "Obra Majalca": ["Materiales", "Mano de Obra", "Maquinaria", "Transporte", "Herramientas", "Servicios Obra", "Imprevistos Obra"],
-  "Negocio":      ["Servicios Digitales", "Software", "Marketing", "Nómina", "Oficina", "Clientes", "Proveedores", "Impuestos", "Imprevistos Negocio"],
-  "Personal":     ["Alimentación", "Transporte Personal", "Salud", "Ropa", "Entretenimiento", "Hogar", "Educación", "Imprevistos Personal"]
+  "Obra Majalca": {
+    "EGRESO":  ["Materiales", "Mano de Obra", "Maquinaria", "Transporte", "Herramientas", "Servicios Obra", "Imprevistos Obra"],
+    "INGRESO": ["Venta", "Préstamo", "Inversión", "Anticipo", "Otro Ingreso Obra"]
+  },
+  "Negocio": {
+    "EGRESO":  ["Servicios Digitales", "Software", "Marketing", "Nómina", "Oficina", "Proveedores", "Impuestos", "Imprevistos Negocio"],
+    "INGRESO": ["Pago de Cliente", "Anticipo", "Venta", "Préstamo", "Otro Ingreso Negocio"]
+  },
+  "Personal": {
+    "EGRESO":  ["Alimentación", "Transporte Personal", "Salud", "Ropa", "Entretenimiento", "Hogar", "Educación", "Imprevistos Personal"],
+    "INGRESO": ["Salario", "Transferencia", "Venta Personal", "Préstamo Recibido", "Otro Ingreso Personal"]
+  }
 };
 
 const SYSTEM_PROMPT = `
@@ -35,7 +44,13 @@ FECHA:
 - Si se menciona fecha relativa ("ayer", "el lunes", "el 3 de junio") → calcúlala en ISO 8601.
 - Sin fecha mencionada → null.
 
-CATEGORÍAS: ${JSON.stringify(CATEGORIAS)}
+CATEGORÍAS POR ENTORNO Y TIPO:
+${JSON.stringify(CATEGORIAS)}
+
+REGLA CRÍTICA DE CATEGORÍA:
+- Los INGRESOS NUNCA van a categorías como "Imprevistos", "Materiales", "Alimentación" etc.
+- Para INGRESO usa SIEMPRE las categorías de la sección INGRESO del entorno correspondiente.
+- Para EGRESO usa SIEMPRE las categorías de la sección EGRESO del entorno correspondiente.
 
 RESPUESTA: JSON puro, sin markdown. Siempre un array "transacciones".
 
