@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fernando — Dashboard de Peter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+  :root {
+    --bg:       #0d0d0d;
+    --surface:  #161616;
+    --border:   #252525;
+    --text:     #f0f0f0;
+    --muted:    #666;
+    --ingreso:  #22c55e;
+    --egreso:   #f43f5e;
+    --personal: #818cf8;
+    --negocio:  #38bdf8;
+    --obra:     #fb923c;
+    --accent:   #a78bfa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .filtros {
+    display: flex;
+    gap: 8px;
+  }
+
+  .filtros select, .filtros button {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .filtros button {
+    background: var(--accent);
+    color: #000;
+    font-weight: 600;
+    border: none;
+  }
+
+  main { padding: 32px; max-width: 1200px; margin: 0 auto; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+  }
+
+  .card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .card-value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+
+  .card-value.ingreso { color: var(--ingreso); }
+  .card-value.egreso  { color: var(--egreso); }
+  .card-value.balance { color: var(--accent); }
+
+  .card-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .panel-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .entorno-bars { display: flex; flex-direction: column; gap: 14px; }
+
+  .entorno-bar { }
+
+  .entorno-bar-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .entorno-bar-name { font-weight: 500; }
+  .entorno-bar-value { color: var(--muted); font-size: 12px; }
+
+  .bar-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.6s ease;
+  }
+
+  .tabla-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    padding: 0 0 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 12px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .badge-personal { background: #818cf820; color: var(--personal); }
+  .badge-negocio  { background: #38bdf820; color: var(--negocio); }
+  .badge-obra     { background: #fb923c20; color: var(--obra); }
+  .badge-ingreso  { background: #22c55e20; color: var(--ingreso); }
+  .badge-egreso   { background: #f43f5e20; color: var(--egreso); }
+
+  .monto-ingreso { color: var(--ingreso); font-weight: 600; }
+  .monto-egreso  { color: var(--egreso);  font-weight: 600; }
+
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 12px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 768px) {
+    main { padding: 16px; }
+    header { padding: 16px; }
+    .grid2 { grid-template-columns: 1fr; }
+    .filtros select { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Fernando <span>·</span> Peter</div>
+  <div class="filtros">
+    <select id="mesSelect" onchange="cargarDatos()">
+      <option value="0">Este mes</option>
+      <option value="1">Mes anterior</option>
+      <option value="3">Últimos 3 meses</option>
+      <option value="12">Este año</option>
+    </select>
+    <select id="entornoSelect" onchange="cargarDatos()">
+      <option value="">Todos los entornos</option>
+      <option value="Personal">Personal</option>
+      <option value="Negocio">Negocio</option>
+      <option value="Obra Majalca">Obra Majalca</option>
+    </select>
+    <button onclick="cargarDatos()">↻ Actualizar</button>
+  </div>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Ingresos</div>
+      <div class="card-value ingreso" id="totalIngresos">$0</div>
+      <div class="card-sub" id="countIngresos">0 movimientos</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Egresos</div>
+      <div class="card-value egreso" id="totalEgresos">$0</div>
+      <div class="card-sub" id="countEgresos">0 movimientos</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Balance</div>
+      <div class="card-value balance" id="balance">$0</div>
+      <div class="card-sub">Ingresos − Egresos</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Registros</div>
+      <div class="card-value" id="totalRegistros">0</div>
+      <div class="card-sub">Total en el período</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="panel-title">Por entorno</div>
+      <div class="entorno-bars" id="entornoBars">
+        <div class="loading"><div class="spinner"></div>Cargando...</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Distribución de egresos</div>
+      <canvas id="chartCategorias" height="200"></canvas>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tabla-header">
+      <div class="panel-title" style="margin:0">Últimos movimientos</div>
+    </div>
+    <div id="tablaContainer">
+      <div class="loading"><div class="spinner"></div>Cargando...</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const SUPABASE_URL     = "https://nhjonjuyzbqkkouobefq.supabase.co";
+const SUPABASE_ANON    = "REEMPLAZA_CON_TU_ANON_KEY";
+
+let chartInstance = null;
+
+function fmt(n) {
+  return parseFloat(n).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+}
+
+function fechaDesde(meses) {
+  const d = new Date();
+  if (meses === 0) { d.setDate(1); d.setHours(0,0,0,0); }
+  else { d.setMonth(d.getMonth() - meses); d.setDate(1); d.setHours(0,0,0,0); }
+  return d.toISOString();
+}
+
+async function fetchTransacciones(desde, entorno) {
+  let url = `${SUPABASE_URL}/rest/v1/transacciones?select=*&fecha_transaccion=gte.${desde}&order=fecha_transaccion.desc`;
+  if (entorno) url += `&entorno=eq.${encodeURIComponent(entorno)}`;
+
+  const res = await fetch(url, {
+    headers: {
+      "apikey": SUPABASE_ANON,
+      "Authorization": `Bearer ${SUPABASE_ANON}`
+    }
+  });
+  return res.json();
+}
+
+function renderCards(data) {
+  const ingresos = data.filter(r => r.tipo === "INGRESO");
+  const egresos  = data.filter(r => r.tipo === "EGRESO");
+  const sumI = ingresos.reduce((s, r) => s + parseFloat(r.monto), 0);
+  const sumE = egresos.reduce((s,  r) => s + parseFloat(r.monto), 0);
+
+  document.getElementById("totalIngresos").textContent  = fmt(sumI);
+  document.getElementById("totalEgresos").textContent   = fmt(sumE);
+  document.getElementById("balance").textContent        = fmt(sumI - sumE);
+  document.getElementById("totalRegistros").textContent = data.length;
+  document.getElementById("countIngresos").textContent  = `${ingresos.length} movimientos`;
+  document.getElementById("countEgresos").textContent   = `${egresos.length} movimientos`;
+
+  const bal = document.getElementById("balance");
+  bal.className = `card-value ${sumI - sumE >= 0 ? "ingreso" : "egreso"}`;
+}
+
+function renderEntornoBars(data) {
+  const entornos = [
+    { name: "Personal",     color: "var(--personal)", key: "Personal"     },
+    { name: "Negocio",      color: "var(--negocio)",  key: "Negocio"      },
+    { name: "Obra Majalca", color: "var(--obra)",     key: "Obra Majalca" },
+  ];
+
+  const totales = entornos.map(e => ({
+    ...e,
+    total: data.filter(r => r.entorno === e.key).reduce((s, r) => s + parseFloat(r.monto), 0)
+  }));
+
+  const max = Math.max(...totales.map(e => e.total), 1);
+
+  document.getElementById("entornoBars").innerHTML = totales.map(e => `
+    <div class="entorno-bar">
+      <div class="entorno-bar-header">
+        <span class="entorno-bar-name">${e.name}</span>
+        <span class="entorno-bar-value">${fmt(e.total)}</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(e.total/max*100).toFixed(1)}%;background:${e.color}"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderChart(data) {
+  const egresos = data.filter(r => r.tipo === "EGRESO");
+  const porCategoria = {};
+  egresos.forEach(r => {
+    porCategoria[r.categoria] = (porCategoria[r.categoria] || 0) + parseFloat(r.monto);
+  });
+
+  const labels  = Object.keys(porCategoria);
+  const valores = Object.values(porCategoria);
+  const colores = ["#818cf8","#38bdf8","#fb923c","#22c55e","#f43f5e","#a78bfa","#fbbf24","#34d399","#f472b6","#60a5fa"];
+
+  const ctx = document.getElementById("chartCategorias").getContext("2d");
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{ data: valores, backgroundColor: colores.slice(0, labels.length), borderWidth: 0 }]
+    },
+    options: {
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#666", font: { size: 11 }, padding: 12 } }
+      },
+      cutout: "65%"
+    }
+  });
+}
+
+function renderTabla(data) {
+  if (!data.length) {
+    document.getElementById("tablaContainer").innerHTML = `<div class="loading">Sin registros en este período</div>`;
+    return;
+  }
+
+  const rows = data.slice(0, 50).map(r => {
+    const fecha = new Date(r.fecha_transaccion).toLocaleDateString("es-MX", {
+      timeZone: "America/Chihuahua", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
+    });
+    const entornoCss = r.entorno === "Personal" ? "personal" : r.entorno === "Negocio" ? "negocio" : "obra";
+    return `
+      <tr>
+        <td style="color:var(--muted);font-size:12px">#${r.id}</td>
+        <td>${r.concepto}</td>
+        <td><span class="badge badge-${entornoCss}">${r.entorno}</span></td>
+        <td style="color:var(--muted);font-size:12px">${r.categoria}</td>
+        <td class="monto-${r.tipo.toLowerCase()}">${r.tipo === "INGRESO" ? "+" : "-"}${fmt(r.monto)}</td>
+        <td style="color:var(--muted);font-size:12px">${fecha}</td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("tablaContainer").innerHTML = `
+    <table>
+      <thead><tr>
+        <th>#</th><th>Concepto</th><th>Entorno</th><th>Categoría</th><th>Monto</th><th>Fecha</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function cargarDatos() {
+  const meses   = parseInt(document.getElementById("mesSelect").value);
+  const entorno = document.getElementById("entornoSelect").value;
+  const desde   = fechaDesde(meses);
+
+  try {
+    const data = await fetchTransacciones(desde, entorno);
+    renderCards(data);
+    renderEntornoBars(data);
+    renderChart(data);
+    renderTabla(data);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+cargarDatos();
+setInterval(cargarDatos, 60000); // Auto-refresh cada minuto
+</script>
+</body>
+</html>

@@ -1,19 +1,18 @@
 {
   "name": "fernando-bot",
-  "version": "1.0.0",
-  "description": "Asistente financiero Fernando — Twilio WhatsApp + Whisper + OpenAI + Supabase",
+  "version": "2.0.0",
+  "description": "Fernando — Asistente financiero de Peter vía Telegram",
   "type": "module",
-  "main": "paso3_webhook.js",
+  "main": "bot.js",
   "scripts": {
-    "start": "node paso3_webhook.js",
-    "dev":   "node --watch paso3_webhook.js"
+    "start": "node bot.js",
+    "dev":   "node --watch bot.js"
   },
   "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
     "openai":                "^4.47.0",
     "@supabase/supabase-js": "^2.43.0",
     "axios":                 "^1.7.2",
-    "express":               "^4.19.2",
-    "form-data":             "^4.0.0",
-    "twilio":                "^5.0.0"
+    "form-data":             "^4.0.0"
   }
 }
