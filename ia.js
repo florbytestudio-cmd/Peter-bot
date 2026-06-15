@@ -126,6 +126,18 @@ const EJEMPLOS = [
   }
 ];
 
+// ── Respuestas conversacionales ──────────────────────────────
+const RESPUESTAS = [
+  "👋 ¡Hola! Estoy listo para registrar tus movimientos.\n\nMándame un audio o texto con tus gastos e ingresos y los anoto al instante.\n\nEjemplos:\n• _\"Gasté 800 en cemento\"_\n• _\"Entró pago de cliente 5 mil\"_\n• _\"Ayer pagué 3,200 de varilla\"_",
+  "😊 ¡Aquí estoy! Cuéntame tus movimientos del día.\n\nPuedes mandarme varios en un solo mensaje o audio.",
+  "🤖 Listo para trabajar. Dime qué gastos o ingresos quieres registrar.",
+  "💬 Hola. Para registrar un movimiento dime el monto, concepto y yo lo clasifico automáticamente.\n\n¿Qué quieres anotar?"
+];
+
+export function respuestaConversacional() {
+  return RESPUESTAS[Math.floor(Math.random() * RESPUESTAS.length)];
+}
+
 export async function procesarGastoConIA(texto) {
   const textoLimpio = texto.trim();
   if (!textoLimpio || textoLimpio.length < 3) throw new Error("Texto demasiado corto.");

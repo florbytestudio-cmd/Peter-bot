@@ -7,7 +7,7 @@ import TelegramBot   from "node-telegram-bot-api";
 import axios         from "axios";
 import FormData      from "form-data";
 import { createClient } from "@supabase/supabase-js";
-import { procesarGastoConIA } from "./ia.js";
+import { procesarGastoConIA, respuestaConversacional } from "./ia.js";
 import express        from "express";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
@@ -141,11 +141,7 @@ async function procesarMensaje(chatId, texto, esAudio = false) {
   const resultado = await procesarGastoConIA(texto);
 
   if (!resultado.success || !resultado.transacciones.length) {
-    await bot.sendMessage(chatId,
-      "🤔 No detecté ningún movimiento financiero.\n\n" +
-      "Ejemplos:\n• _\"Gasté 800 en cemento\"_\n• _\"Entró pago de cliente 5 mil\"_\n• _\"Ayer pagué 3,200 de varilla\"_",
-      { parse_mode: "Markdown" }
-    );
+    await bot.sendMessage(chatId, respuestaConversacional(), { parse_mode: "Markdown" });
     return;
   }
 
@@ -432,7 +428,7 @@ bot.on("message", async (msg) => {
     }
   } catch (err) {
     console.error("[ERROR]", err.message);
-    await bot.sendMessage(chatId, "❌ Ocurrió un error. Intenta de nuevo.");
+    await bot.sendMessage(chatId, respuestaConversacional(), { parse_mode: "Markdown" });
   }
 });
 
