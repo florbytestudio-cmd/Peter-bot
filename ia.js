@@ -1,5 +1,5 @@
 // ============================================================
-// IA — Clasificación de gastos con GPT-4o mini
+// IA — Clasificación MÚLTIPLE de gastos con GPT-4o mini
 // ============================================================
 
 import OpenAI from "openai";
@@ -14,43 +14,101 @@ const CATEGORIAS = {
 
 const SYSTEM_PROMPT = `
 Eres Fernando, un asistente financiero experto.
-Tu ÚNICA función es analizar texto (transcripción de voz o mensaje escrito) y extraer un movimiento financiero.
+Tu función es analizar texto (puede ser una transcripción de voz o mensaje escrito) y extraer TODOS los movimientos financieros mencionados.
+
+IMPORTANTE: Un solo mensaje puede contener MÚLTIPLES transacciones. Debes detectarlas TODAS.
+Ejemplo: "Gasté 300 en cemento y también compré tijeras para el negocio en 20 pesos" → 2 transacciones.
 
 ENTORNOS:
-- "Obra Majalca": cemento, varilla, chalán, block, flete, terreno, cabaña, Majalca, obra, albañil, hierro, arena, grava, concreto, plomero, electricista (contexto construcción).
-- "Negocio": cliente, factura, software, oficina, diseño, proyecto, desarrollo, reunión, contrato, servidor, dominio, marketing, empleado, nómina.
-- "Personal": súper, supermercado, restaurante, comida, ropa, gasolina, médico, farmacia, gym, streaming, cine, familia, hijo, hija.
+- "Obra Majalca": cemento, varilla, chalán, block, flete, terreno, cabaña, Majalca, obra, albañil, hierro, arena, grava, concreto, plomero, electricista.
+- "Negocio": cliente, factura, software, oficina, diseño, proyecto, desarrollo, reunión, contrato, servidor, dominio, marketing, empleado, nómina, tijeras (contexto negocio).
+- "Personal": súper, supermercado, restaurante, comida, ropa, gasolina, médico, farmacia, gym, streaming, cine, familia.
 
 TIPO:
 - "INGRESO": pagaron, entró, recibí, cobré, depósito, abono, venta.
-- "EGRESO": gasté, pagué, compré, salió, invertí, flete, costo. Si no hay señal clara → "EGRESO".
+- "EGRESO": gasté, pagué, compré, salió, invertí, flete, costo. Sin señal clara → "EGRESO".
 
-MONTO: convierte texto a número. "cuatro mil quinientos" → 4500. Sin moneda. Si no identificas → -1.
+MONTO: convierte texto a número. "cuatro mil quinientos" → 4500. Sin moneda. Sin monto identificable → -1.
 
 FECHA:
-- Fecha actual: ${new Date().toISOString()} (zona horaria Chihuahua, México UTC-7).
-- Si el texto menciona fecha relativa ("ayer", "el lunes", "el 3 de junio", "la semana pasada"), calcúlala y devuélvela en ISO 8601.
-- Si no se menciona fecha → null (el sistema usará la fecha actual).
+- Fecha actual: ${new Date().toISOString()} (UTC-7 Chihuahua, México).
+- Si se menciona fecha relativa ("ayer", "el lunes", "el 3 de junio") → calcúlala en ISO 8601.
+- Sin fecha mencionada → null.
 
 CATEGORÍAS: ${JSON.stringify(CATEGORIAS)}
 
-RESPUESTA: JSON puro, sin markdown, sin explicaciones.
+RESPUESTA: JSON puro, sin markdown. Siempre un array "transacciones".
 
-ÉXITO: {"monto":number,"tipo":"INGRESO"|"EGRESO","concepto":string,"categoria":string,"entorno":"Personal"|"Negocio"|"Obra Majalca","fecha_transaccion":string|null,"confianza":number,"error":null}
-SIN TRANSACCIÓN: {"monto":null,"tipo":null,"concepto":null,"categoria":null,"entorno":null,"fecha_transaccion":null,"confianza":0,"error":"NO_TRANSACTION_FOUND"}
+FORMATO:
+{
+  "transacciones": [
+    {
+      "monto": number,
+      "tipo": "INGRESO" | "EGRESO",
+      "concepto": string,
+      "categoria": string,
+      "entorno": "Personal" | "Negocio" | "Obra Majalca",
+      "fecha_transaccion": string | null,
+      "confianza": number,
+      "error": null
+    }
+  ]
+}
+
+Si NO hay ninguna transacción en el texto:
+{
+  "transacciones": []
+}
 `;
 
 const EJEMPLOS = [
-  { role: "user",      content: "gasté cuatro mil quinientos en cemento para la obra" },
-  { role: "assistant", content: JSON.stringify({ monto: 4500, tipo: "EGRESO", concepto: "Compra de cemento", categoria: "Materiales", entorno: "Obra Majalca", fecha_transaccion: null, confianza: 97, error: null }) },
-  { role: "user",      content: "entró el pago del cliente de diseño doce mil" },
-  { role: "assistant", content: JSON.stringify({ monto: 12000, tipo: "INGRESO", concepto: "Pago cliente diseño", categoria: "Clientes", entorno: "Negocio", fecha_transaccion: null, confianza: 95, error: null }) },
-  { role: "user",      content: "ayer pagué tres mil doscientos de varilla que se me olvidó anotar" },
-  { role: "assistant", content: JSON.stringify({ monto: 3200, tipo: "EGRESO", concepto: "Compra de varilla", categoria: "Materiales", entorno: "Obra Majalca", fecha_transaccion: new Date(Date.now() - 86400000).toISOString(), confianza: 94, error: null }) },
-  { role: "user",      content: "ochocientos en el súper" },
-  { role: "assistant", content: JSON.stringify({ monto: 800, tipo: "EGRESO", concepto: "Compras supermercado", categoria: "Alimentación", entorno: "Personal", fecha_transaccion: null, confianza: 92, error: null }) },
-  { role: "user",      content: "hola cómo estás" },
-  { role: "assistant", content: JSON.stringify({ monto: null, tipo: null, concepto: null, categoria: null, entorno: null, fecha_transaccion: null, confianza: 0, error: "NO_TRANSACTION_FOUND" }) },
+  {
+    role: "user",
+    content: "gasté cuatro mil quinientos en cemento para la obra y también pagué ochocientos de súper"
+  },
+  {
+    role: "assistant",
+    content: JSON.stringify({
+      transacciones: [
+        { monto: 4500, tipo: "EGRESO", concepto: "Compra de cemento", categoria: "Materiales", entorno: "Obra Majalca", fecha_transaccion: null, confianza: 97, error: null },
+        { monto: 800,  tipo: "EGRESO", concepto: "Compras supermercado", categoria: "Alimentación", entorno: "Personal", fecha_transaccion: null, confianza: 93, error: null }
+      ]
+    })
+  },
+  {
+    role: "user",
+    content: "entró el pago del cliente de diseño doce mil"
+  },
+  {
+    role: "assistant",
+    content: JSON.stringify({
+      transacciones: [
+        { monto: 12000, tipo: "INGRESO", concepto: "Pago cliente diseño", categoria: "Clientes", entorno: "Negocio", fecha_transaccion: null, confianza: 95, error: null }
+      ]
+    })
+  },
+  {
+    role: "user",
+    content: "ayer pagué tres mil de varilla, hoy compré tijeras para la oficina en 20 pesos y también entró un pago de cliente de cinco mil"
+  },
+  {
+    role: "assistant",
+    content: JSON.stringify({
+      transacciones: [
+        { monto: 3000,  tipo: "EGRESO",  concepto: "Compra de varilla",    categoria: "Materiales",        entorno: "Obra Majalca", fecha_transaccion: new Date(Date.now() - 86400000).toISOString(), confianza: 94, error: null },
+        { monto: 20,    tipo: "EGRESO",  concepto: "Tijeras para oficina",  categoria: "Oficina",           entorno: "Negocio",      fecha_transaccion: null, confianza: 91, error: null },
+        { monto: 5000,  tipo: "INGRESO", concepto: "Pago de cliente",       categoria: "Clientes",          entorno: "Negocio",      fecha_transaccion: null, confianza: 93, error: null }
+      ]
+    })
+  },
+  {
+    role: "user",
+    content: "hola cómo estás"
+  },
+  {
+    role: "assistant",
+    content: JSON.stringify({ transacciones: [] })
+  }
 ];
 
 export async function procesarGastoConIA(texto) {
@@ -62,7 +120,7 @@ export async function procesarGastoConIA(texto) {
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         temperature: 0.1,
-        max_tokens: 300,
+        max_tokens: 800,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
@@ -72,27 +130,29 @@ export async function procesarGastoConIA(texto) {
       });
 
       const parsed = JSON.parse(response.choices[0].message.content);
+      const transacciones = parsed.transacciones || [];
 
-      if (parsed.error === "NO_TRANSACTION_FOUND") {
-        return { success: false, razon: "NO_TRANSACTION_FOUND", datos: null };
+      if (!transacciones.length) {
+        return { success: false, transacciones: [] };
       }
 
-      if (!parsed.monto || parsed.monto === -1) throw new Error("Monto no identificado.");
-
-      return {
-        success: true,
-        datos: {
-          monto:                  parseFloat(parsed.monto),
-          tipo:                   parsed.tipo,
-          concepto:               parsed.concepto,
-          categoria:              parsed.categoria,
-          entorno:                parsed.entorno,
-          confianza_ia:           parsed.confianza ?? null,
+      // Filtrar y limpiar cada transacción
+      const validas = transacciones
+        .filter(t => t.monto && t.monto !== -1 && t.tipo && t.entorno)
+        .map(t => ({
+          monto:                  parseFloat(t.monto),
+          tipo:                   t.tipo,
+          concepto:               t.concepto,
+          categoria:              t.categoria,
+          entorno:                t.entorno,
+          confianza_ia:           t.confianza ?? null,
           transcripcion_original: textoLimpio,
           fuente:                 "telegram",
-          fecha_transaccion:      parsed.fecha_transaccion || new Date().toISOString()
-        }
-      };
+          fecha_transaccion:      t.fecha_transaccion || new Date().toISOString()
+        }));
+
+      return { success: validas.length > 0, transacciones: validas };
+
     } catch (err) {
       if (intento === 2) throw err;
       await new Promise(r => setTimeout(r, 1000));

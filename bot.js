@@ -1,6 +1,6 @@
 // ============================================================
-// FERNANDO BOT — Telegram
-// node-telegram-bot-api + OpenAI Whisper + GPT-4o mini + Supabase
+// FERNANDO BOT — Telegram v2.1
+// Múltiples transacciones + CRUD con botones inline
 // ============================================================
 
 import TelegramBot   from "node-telegram-bot-api";
@@ -16,27 +16,28 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// ── ID de Telegram de Peter (solo él puede usar el bot) ──────
 const PETER_CHAT_ID = process.env.PETER_CHAT_ID;
+
+// Estado temporal para ediciones en curso
+const estadoEdicion = new Map();
 
 // ============================================================
 // UTILIDADES
 // ============================================================
 
 function esAutorizado(chatId) {
-  if (!PETER_CHAT_ID) return true; // Sin restricción si no se configura
+  if (!PETER_CHAT_ID) return true;
   return String(chatId) === String(PETER_CHAT_ID);
 }
 
 async function transcribirAudio(fileId) {
-  const file     = await bot.getFile(fileId);
-  const fileUrl  = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+  const file    = await bot.getFile(fileId);
+  const fileUrl = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
   const { data: audioData } = await axios.get(fileUrl, { responseType: "arraybuffer" });
-  const audioBuffer = Buffer.from(audioData);
 
   const formData = new FormData();
-  formData.append("file", audioBuffer, { filename: "audio.ogg", contentType: "audio/ogg" });
-  formData.append("model",    "whisper-1");
+  formData.append("file", Buffer.from(audioData), { filename: "audio.ogg", contentType: "audio/ogg" });
+  formData.append("model", "whisper-1");
   formData.append("language", "es");
   formData.append("response_format", "text");
 
@@ -50,68 +51,210 @@ async function transcribirAudio(fileId) {
 
 async function guardarTransaccion(datos) {
   const { data, error } = await supabase
-    .from("transacciones")
-    .insert([datos])
-    .select()
-    .single();
+    .from("transacciones").insert([datos]).select().single();
   if (error) throw new Error(error.message);
   return data;
 }
 
-function formatearConfirmacion(t) {
+async function obtenerRegistro(id) {
+  const { data, error } = await supabase
+    .from("transacciones").select("*").eq("id", id).single();
+  if (error) return null;
+  return data;
+}
+
+function fmtMonto(n) {
+  return parseFloat(n).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
+}
+
+function fmtFecha(iso) {
+  return new Date(iso).toLocaleDateString("es-MX", {
+    timeZone: "America/Chihuahua",
+    weekday: "short", day: "numeric", month: "short",
+    hour: "2-digit", minute: "2-digit"
+  });
+}
+
+function entornoEmoji(entorno) {
+  return entorno === "Personal" ? "🏠" : entorno === "Negocio" ? "💼" : "🏗️";
+}
+
+// ── Mensaje de confirmación con botones CRUD ─────────────────
+function mensajeConfirmacion(t) {
   const emoji = t.tipo === "INGRESO" ? "💰" : "💸";
   const signo = t.tipo === "INGRESO" ? "+" : "-";
-  const monto = parseFloat(t.monto).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
-  const fecha = new Date(t.fecha_transaccion).toLocaleDateString("es-MX", {
-    timeZone: "America/Chihuahua",
-    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"
-  });
-  return (
-    `${emoji} *${t.entorno}*\n\n` +
+  const texto =
+    `${emoji} *${t.entorno}* ${entornoEmoji(t.entorno)}\n\n` +
     `📝 ${t.concepto}\n` +
     `🏷️ ${t.categoria}\n` +
-    `💵 ${signo}${monto}\n` +
-    `📅 ${fecha}\n\n` +
-    `_Usa /borrar ${t.id} para eliminar_`
-  );
+    `💵 ${signo}${fmtMonto(t.monto)}\n` +
+    `📅 ${fmtFecha(t.fecha_transaccion)}\n` +
+    `📊 ${t.tipo}\n\n` +
+    `_ID: #${t.id}_`;
+
+  const botones = {
+    inline_keyboard: [[
+      { text: "✏️ Editar", callback_data: `editar:${t.id}` },
+      { text: "🗑️ Borrar", callback_data: `borrar:${t.id}` }
+    ]]
+  };
+
+  return { texto, botones };
 }
 
-function formatearLista(registros) {
-  if (!registros.length) return "📭 No hay registros recientes.";
-  return registros.map(t => {
-    const emoji = t.tipo === "INGRESO" ? "💰" : "💸";
-    const monto = parseFloat(t.monto).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
-    const fecha = new Date(t.fecha_transaccion).toLocaleDateString("es-MX", {
-      timeZone: "America/Chihuahua", day: "numeric", month: "short"
-    });
-    return `${emoji} #${t.id} · ${t.concepto} · ${monto} · ${t.entorno} · ${fecha}`;
-  }).join("\n");
+// ── Mensaje de detalle con botones de edición de campos ──────
+function menuEdicion(id) {
+  return {
+    inline_keyboard: [
+      [
+        { text: "💵 Monto",    callback_data: `edit_campo:${id}:monto` },
+        { text: "📝 Concepto", callback_data: `edit_campo:${id}:concepto` }
+      ],
+      [
+        { text: "🏷️ Categoría", callback_data: `edit_campo:${id}:categoria` },
+        { text: "📊 Tipo",      callback_data: `edit_campo:${id}:tipo` }
+      ],
+      [
+        { text: "🏠 Entorno",  callback_data: `edit_campo:${id}:entorno` },
+        { text: "📅 Fecha",    callback_data: `edit_campo:${id}:fecha_transaccion` }
+      ],
+      [{ text: "❌ Cancelar", callback_data: `cancelar:${id}` }]
+    ]
+  };
 }
 
 // ============================================================
-// PROCESAMIENTO PRINCIPAL (texto o audio)
+// PROCESAMIENTO PRINCIPAL
 // ============================================================
 
-async function procesarMensaje(chatId, texto, transcripcion = false) {
-  const prefijo = transcripcion ? `🎙️ _"${texto}"_\n\n` : "";
+async function procesarMensaje(chatId, texto, esAudio = false) {
+  const prefijo = esAudio ? `🎙️ _"${texto}"_\n\n` : "";
 
   const resultado = await procesarGastoConIA(texto);
 
-  if (!resultado.success) {
+  if (!resultado.success || !resultado.transacciones.length) {
     await bot.sendMessage(chatId,
       "🤔 No detecté ningún movimiento financiero.\n\n" +
-      "Ejemplos:\n" +
-      "• _\"Gasté 800 en cemento\"_\n" +
-      "• _\"Entró pago de cliente, 5 mil\"_\n" +
-      "• _\"Ayer pagué 3,200 de varilla\"_",
+      "Ejemplos:\n• _\"Gasté 800 en cemento\"_\n• _\"Entró pago de cliente 5 mil\"_\n• _\"Ayer pagué 3,200 de varilla\"_",
       { parse_mode: "Markdown" }
     );
     return;
   }
 
-  const guardado = await guardarTransaccion(resultado.datos);
-  await bot.sendMessage(chatId, prefijo + formatearConfirmacion(guardado), { parse_mode: "Markdown" });
+  const { transacciones } = resultado;
+  const total = transacciones.length;
+
+  // Si hay múltiples, avisa cuántas detectó
+  if (total > 1) {
+    await bot.sendMessage(chatId,
+      `${prefijo}✅ Detecté *${total} transacciones*. Registrando...`,
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  // Guardar y confirmar cada una
+  for (let i = 0; i < transacciones.length; i++) {
+    try {
+      const guardado = await guardarTransaccion(transacciones[i]);
+      const { texto: msg, botones } = mensajeConfirmacion(guardado);
+
+      const encabezado = total > 1 ? `*(${i+1}/${total})* ` : "";
+      await bot.sendMessage(chatId, encabezado + (i === 0 ? prefijo : "") + msg, {
+        parse_mode: "Markdown",
+        reply_markup: botones
+      });
+    } catch (err) {
+      await bot.sendMessage(chatId, `❌ Error guardando transacción ${i+1}: ${err.message}`);
+    }
+  }
 }
+
+// ============================================================
+// CALLBACK QUERIES (botones inline)
+// ============================================================
+
+bot.on("callback_query", async (query) => {
+  const chatId    = query.message.chat.id;
+  const messageId = query.message.message_id;
+  const data      = query.data;
+
+  await bot.answerCallbackQuery(query.id);
+
+  // ── Borrar ────────────────────────────────────────────────
+  if (data.startsWith("borrar:")) {
+    const id = parseInt(data.split(":")[1]);
+    const registro = await obtenerRegistro(id);
+
+    if (!registro) {
+      await bot.editMessageText(`❌ Registro #${id} no encontrado.`, { chat_id: chatId, message_id: messageId });
+      return;
+    }
+
+    // Pedir confirmación
+    await bot.editMessageReplyMarkup({
+      inline_keyboard: [[
+        { text: "✅ Sí, borrar", callback_data: `confirmar_borrar:${id}` },
+        { text: "❌ Cancelar",   callback_data: `cancelar:${id}` }
+      ]]
+    }, { chat_id: chatId, message_id: messageId });
+  }
+
+  // ── Confirmar borrado ─────────────────────────────────────
+  else if (data.startsWith("confirmar_borrar:")) {
+    const id = parseInt(data.split(":")[1]);
+    const registro = await obtenerRegistro(id);
+    const { error } = await supabase.from("transacciones").delete().eq("id", id);
+
+    if (error) {
+      await bot.sendMessage(chatId, `❌ Error al borrar: ${error.message}`);
+      return;
+    }
+
+    await bot.editMessageText(
+      `🗑️ *Eliminado #${id}*\n_${registro?.concepto} — ${fmtMonto(registro?.monto)}_`,
+      { chat_id: chatId, message_id: messageId, parse_mode: "Markdown" }
+    );
+  }
+
+  // ── Editar — mostrar menú de campos ──────────────────────
+  else if (data.startsWith("editar:")) {
+    const id = parseInt(data.split(":")[1]);
+    await bot.editMessageReplyMarkup(
+      menuEdicion(id),
+      { chat_id: chatId, message_id: messageId }
+    );
+  }
+
+  // ── Editar campo específico ───────────────────────────────
+  else if (data.startsWith("edit_campo:")) {
+    const [, id, campo] = data.split(":");
+    estadoEdicion.set(chatId, { id: parseInt(id), campo, messageId });
+
+    const etiquetas = {
+      monto:             "💵 Nuevo monto (ej: 4500)",
+      concepto:          "📝 Nuevo concepto",
+      categoria:         "🏷️ Nueva categoría",
+      tipo:              "📊 Tipo: escribe INGRESO o EGRESO",
+      entorno:           "🏠 Entorno: Personal / Negocio / Obra Majalca",
+      fecha_transaccion: "📅 Nueva fecha (ej: 2024-06-03 o 'ayer')"
+    };
+
+    await bot.sendMessage(chatId,
+      `✏️ *Editando #${id} — ${campo}*\n\n${etiquetas[campo] || "Nuevo valor:"}`,
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  // ── Cancelar ──────────────────────────────────────────────
+  else if (data.startsWith("cancelar:")) {
+    const id = parseInt(data.split(":")[1]);
+    estadoEdicion.delete(chatId);
+    const registro = await obtenerRegistro(id);
+    if (!registro) return;
+    const { texto, botones } = mensajeConfirmacion(registro);
+    await bot.editMessageReplyMarkup(botones, { chat_id: chatId, message_id: messageId });
+  }
+});
 
 // ============================================================
 // COMANDOS
@@ -121,136 +264,135 @@ bot.onText(/\/start/, async (msg) => {
   if (!esAutorizado(msg.chat.id)) return;
   await bot.sendMessage(msg.chat.id,
     "👋 Hola Peter, soy *Fernando*, tu asistente financiero.\n\n" +
-    "Mándame un audio o texto con tus gastos e ingresos y los registro automáticamente.\n\n" +
-    "*Comandos disponibles:*\n" +
-    "/ultimos — Ver últimos 10 registros\n" +
-    "/borrar [id] — Eliminar un registro\n" +
-    "/editar [id] [campo] [valor] — Editar un registro\n" +
-    "/resumen — Resumen del mes actual\n" +
-    "/dashboard — Ver tu dashboard web",
+    "Mándame un audio o texto con tus gastos e ingresos — puedes mencionar varios en un solo mensaje.\n\n" +
+    "*Comandos:*\n" +
+    "/ultimos — Últimos 10 registros\n" +
+    "/resumen — Resumen del mes\n" +
+    "/dashboard — Tu dashboard web\n" +
+    "/ayuda — Ver todos los comandos",
     { parse_mode: "Markdown" }
   );
 });
 
-// ── /ultimos ──────────────────────────────────────────────────
+bot.onText(/\/ayuda/, async (msg) => {
+  if (!esAutorizado(msg.chat.id)) return;
+  await bot.sendMessage(msg.chat.id,
+    "*Comandos disponibles:*\n\n" +
+    "📋 /ultimos — Últimos 10 registros con botones de edición\n" +
+    "📊 /resumen — Resumen financiero del mes\n" +
+    "🌐 /dashboard — Link al dashboard web\n\n" +
+    "*Para editar o borrar:*\nUsa los botones ✏️ y 🗑️ que aparecen en cada registro.\n\n" +
+    "*Para registrar:*\nManda texto o audio. Puedes incluir varias transacciones en un solo mensaje.",
+    { parse_mode: "Markdown" }
+  );
+});
+
 bot.onText(/\/ultimos/, async (msg) => {
   if (!esAutorizado(msg.chat.id)) return;
   try {
     const { data, error } = await supabase
       .from("transacciones")
-      .select("id, tipo, concepto, monto, entorno, fecha_transaccion")
+      .select("*")
       .order("created_at", { ascending: false })
       .limit(10);
     if (error) throw error;
-    await bot.sendMessage(msg.chat.id, `📋 *Últimos registros:*\n\n${formatearLista(data)}`, { parse_mode: "Markdown" });
-  } catch (err) {
-    await bot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`);
-  }
-});
+    if (!data.length) { await bot.sendMessage(msg.chat.id, "📭 Sin registros aún."); return; }
 
-// ── /borrar [id] ──────────────────────────────────────────────
-bot.onText(/\/borrar (\d+)/, async (msg, match) => {
-  if (!esAutorizado(msg.chat.id)) return;
-  const id = parseInt(match[1]);
-  try {
-    // Verificar que existe
-    const { data: registro } = await supabase
-      .from("transacciones").select("id, concepto, monto").eq("id", id).single();
-    if (!registro) {
-      await bot.sendMessage(msg.chat.id, `❌ No encontré el registro #${id}`);
-      return;
+    await bot.sendMessage(msg.chat.id, "📋 *Últimos 10 registros:*", { parse_mode: "Markdown" });
+
+    for (const t of data) {
+      const { texto, botones } = mensajeConfirmacion(t);
+      await bot.sendMessage(msg.chat.id, texto, { parse_mode: "Markdown", reply_markup: botones });
     }
-    const { error } = await supabase.from("transacciones").delete().eq("id", id);
-    if (error) throw error;
-    const monto = parseFloat(registro.monto).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
-    await bot.sendMessage(msg.chat.id, `🗑️ Eliminado: *#${id} — ${registro.concepto} (${monto})*`, { parse_mode: "Markdown" });
   } catch (err) {
     await bot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`);
   }
 });
 
-// ── /editar [id] [campo] [valor] ──────────────────────────────
-// Ejemplo: /editar 15 monto 350
-// Ejemplo: /editar 15 concepto Compra de block
-bot.onText(/\/editar (\d+) (\w+) (.+)/, async (msg, match) => {
-  if (!esAutorizado(msg.chat.id)) return;
-  const id    = parseInt(match[1]);
-  const campo = match[2].toLowerCase();
-  const valor = match[3].trim();
-
-  const camposPermitidos = ["monto", "concepto", "categoria", "entorno", "tipo"];
-  if (!camposPermitidos.includes(campo)) {
-    await bot.sendMessage(msg.chat.id,
-      `❌ Campo inválido. Puedes editar: ${camposPermitidos.join(", ")}`
-    );
-    return;
-  }
-
-  try {
-    const valorFinal = campo === "monto" ? parseFloat(valor) : valor;
-    const { error } = await supabase
-      .from("transacciones")
-      .update({ [campo]: valorFinal })
-      .eq("id", id);
-    if (error) throw error;
-    await bot.sendMessage(msg.chat.id, `✅ Registro *#${id}* actualizado: *${campo}* → ${valor}`, { parse_mode: "Markdown" });
-  } catch (err) {
-    await bot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`);
-  }
-});
-
-// ── /resumen ─────────────────────────────────────────────────
 bot.onText(/\/resumen/, async (msg) => {
   if (!esAutorizado(msg.chat.id)) return;
   try {
-    const inicio = new Date();
-    inicio.setDate(1); inicio.setHours(0,0,0,0);
-
+    const inicio = new Date(); inicio.setDate(1); inicio.setHours(0,0,0,0);
     const { data, error } = await supabase
-      .from("transacciones")
-      .select("tipo, monto, entorno")
+      .from("transacciones").select("tipo, monto, entorno")
       .gte("fecha_transaccion", inicio.toISOString());
     if (error) throw error;
 
-    const entornos = ["Personal", "Negocio", "Obra Majalca"];
-    let resumen = `📊 *Resumen ${new Date().toLocaleDateString("es-MX", { month: "long", year: "numeric" })}*\n\n`;
+    const mes = new Date().toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+    let resumen = `📊 *Resumen ${mes}*\n\n`;
 
-    for (const entorno of entornos) {
-      const registros = data.filter(r => r.entorno === entorno);
-      const ingresos  = registros.filter(r => r.tipo === "INGRESO").reduce((s, r) => s + parseFloat(r.monto), 0);
-      const egresos   = registros.filter(r => r.tipo === "EGRESO").reduce((s, r) => s + parseFloat(r.monto), 0);
-      const balance   = ingresos - egresos;
-      const emoji     = entorno === "Personal" ? "🏠" : entorno === "Negocio" ? "💼" : "🏗️";
-
+    for (const [entorno, emoji] of [["Personal","🏠"],["Negocio","💼"],["Obra Majalca","🏗️"]]) {
+      const reg = data.filter(r => r.entorno === entorno);
+      const ing = reg.filter(r => r.tipo === "INGRESO").reduce((s,r) => s + parseFloat(r.monto), 0);
+      const egr = reg.filter(r => r.tipo === "EGRESO").reduce((s,r)  => s + parseFloat(r.monto), 0);
       resumen += `${emoji} *${entorno}*\n`;
-      resumen += `  💰 Ingresos: ${ingresos.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}\n`;
-      resumen += `  💸 Egresos:  ${egresos.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}\n`;
-      resumen += `  📈 Balance:  ${balance.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}\n\n`;
+      resumen += `  💰 ${fmtMonto(ing)}  💸 ${fmtMonto(egr)}\n`;
+      resumen += `  Balance: *${fmtMonto(ing - egr)}*\n\n`;
     }
 
-    resumen += `🌐 Dashboard: ${process.env.DASHBOARD_URL || "Próximamente"}`;
+    const totalIng = data.filter(r=>r.tipo==="INGRESO").reduce((s,r)=>s+parseFloat(r.monto),0);
+    const totalEgr = data.filter(r=>r.tipo==="EGRESO").reduce((s,r) =>s+parseFloat(r.monto),0);
+    resumen += `─────────────────\n`;
+    resumen += `💰 Total ingresos: *${fmtMonto(totalIng)}*\n`;
+    resumen += `💸 Total egresos:  *${fmtMonto(totalEgr)}*\n`;
+    resumen += `📈 Balance global: *${fmtMonto(totalIng - totalEgr)}*`;
+
     await bot.sendMessage(msg.chat.id, resumen, { parse_mode: "Markdown" });
   } catch (err) {
     await bot.sendMessage(msg.chat.id, `❌ Error: ${err.message}`);
   }
 });
 
-// ── /dashboard ───────────────────────────────────────────────
 bot.onText(/\/dashboard/, async (msg) => {
   if (!esAutorizado(msg.chat.id)) return;
   const url = process.env.DASHBOARD_URL || "Próximamente";
-  await bot.sendMessage(msg.chat.id, `🌐 Tu dashboard: ${url}`);
+  await bot.sendMessage(msg.chat.id, `🌐 *Tu dashboard:*\n${url}`, { parse_mode: "Markdown" });
 });
 
 // ============================================================
-// MENSAJES: TEXTO Y AUDIO
+// MENSAJES: TEXTO, AUDIO Y EDICIONES EN CURSO
 // ============================================================
 
 bot.on("message", async (msg) => {
   if (!esAutorizado(msg.chat.id)) return;
-  if (msg.text?.startsWith("/")) return; // Ya manejado por onText
+  if (msg.text?.startsWith("/")) return;
 
   const chatId = msg.chat.id;
+
+  // ── Edición en curso ──────────────────────────────────────
+  if (estadoEdicion.has(chatId) && msg.text) {
+    const { id, campo } = estadoEdicion.get(chatId);
+    estadoEdicion.delete(chatId);
+
+    try {
+      let valor = msg.text.trim();
+
+      // Convertir monto a número
+      if (campo === "monto") valor = parseFloat(valor.replace(/[^0-9.]/g, ""));
+
+      // Convertir fecha relativa
+      if (campo === "fecha_transaccion") {
+        const lower = valor.toLowerCase();
+        if (lower === "ayer") valor = new Date(Date.now() - 86400000).toISOString();
+        else if (lower === "hoy") valor = new Date().toISOString();
+        else valor = new Date(valor).toISOString();
+      }
+
+      const { error } = await supabase
+        .from("transacciones").update({ [campo]: valor }).eq("id", id);
+      if (error) throw error;
+
+      const actualizado = await obtenerRegistro(id);
+      const { texto, botones } = mensajeConfirmacion(actualizado);
+      await bot.sendMessage(chatId,
+        `✅ *Actualizado #${id}*\n\n${texto}`,
+        { parse_mode: "Markdown", reply_markup: botones }
+      );
+    } catch (err) {
+      await bot.sendMessage(chatId, `❌ Error al editar: ${err.message}`);
+    }
+    return;
+  }
 
   try {
     // ── Audio / nota de voz ───────────────────────────────────
@@ -274,4 +416,4 @@ bot.on("message", async (msg) => {
   }
 });
 
-console.log("🤖 Fernando Bot (Telegram) iniciado...");
+console.log("🤖 Fernando Bot v2.1 (Telegram) iniciado...");
