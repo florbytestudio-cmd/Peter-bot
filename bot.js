@@ -93,7 +93,7 @@ function mensajeConfirmacion(t) {
     `_ID: #${t.id}_`;
 
   const botones = {
-    inline_keyboard: [[
+    inline_keyboard: [
       { text: "✏️ Editar", callback_data: `editar:${t.id}` },
       { text: "🗑️ Borrar", callback_data: `borrar:${t.id}` }
     ]]
@@ -192,7 +192,7 @@ bot.on("callback_query", async (query) => {
 
     // Pedir confirmación
     await bot.editMessageReplyMarkup({
-      inline_keyboard: [[
+      inline_keyboard: [
         { text: "✅ Sí, borrar", callback_data: `confirmar_borrar:${id}` },
         { text: "❌ Cancelar",   callback_data: `cancelar:${id}` }
       ]]
@@ -243,6 +243,22 @@ bot.on("callback_query", async (query) => {
       `✏️ *Editando #${id} — ${campo}*\n\n${etiquetas[campo] || "Nuevo valor:"}`,
       { parse_mode: "Markdown" }
     );
+  }
+
+  // ── Listo — quita los botones ────────────────────────────
+  else if (data.startsWith("listo:")) {
+    const id = parseInt(data.split(":")[1]);
+    const registro = await obtenerRegistro(id);
+    if (!registro) return;
+    const { texto } = mensajeConfirmacion(registro);
+    await bot.editMessageText(texto + "
+
+✅ _Registrado_", {
+      chat_id: chatId,
+      message_id: messageId,
+      parse_mode: "Markdown",
+      reply_markup: { inline_keyboard: [] }
+    });
   }
 
   // ── Cancelar ──────────────────────────────────────────────
