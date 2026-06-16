@@ -109,7 +109,7 @@ main{padding:26px 32px;max-width:1300px;margin:0 auto;position:relative;z-index:
 .ebar-fill{height:100%;border-radius:99px;transition:width .9s cubic-bezier(.4,0,.2,1)}
 
 /* ── Tabla ── */
-.tabla-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;animation:fadeUp .5s ease .4s both}
+.tabla-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;animation:fadeUp .5s ease .4s both}
 .tabla-header{padding:16px 22px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
 .tabla-header-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
 table{width:100%;border-collapse:collapse}
@@ -524,9 +524,7 @@ function renderTabla(data) {
   `).join('');
   document.getElementById('tablaContainer').innerHTML=`
     <div class="tabla-hint">← Desliza para ver más →</div>
-    <div class="tabla-scroll">
-      <table><thead><tr><th>#</th><th>Concepto</th><th>Entorno</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table>
-    </div>`;
+    <table><thead><tr><th>#</th><th>Concepto</th><th>Entorno</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /* ── Modal ── */
