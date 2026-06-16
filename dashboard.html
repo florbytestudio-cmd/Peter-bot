@@ -42,6 +42,10 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-h
 .login-btn:active{transform:translateY(0)}
 .login-error{color:var(--egreso);font-size:13px;margin-top:10px;display:none}
 .login-lock{font-size:11px;color:var(--muted);margin-top:20px;display:flex;align-items:center;justify-content:center;gap:6px}
+.input-wrap{position:relative}
+.input-wrap input{width:100%;padding-right:42px}
+.show-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted);padding:0;line-height:1;transition:color .2s}
+.show-btn:hover{color:var(--accent)}
 
 /* ── App ── */
 #appScreen{display:none}
@@ -178,11 +182,17 @@ tbody tr:hover td{background:var(--surface2)}
     <div class="login-sub">Asistente financiero de Peter</div>
     <div class="login-field">
       <label>USUARIO</label>
-      <input type="text" id="loginUser" placeholder="Ingresa tu usuario" autocomplete="username">
+      <div class="input-wrap">
+        <input type="text" id="loginUser" placeholder="Ingresa tu usuario" autocomplete="username">
+        <button class="show-btn" type="button" onclick="toggleShow('loginUser', this)" tabindex="-1">👁️</button>
+      </div>
     </div>
     <div class="login-field">
       <label>CONTRASEÑA</label>
-      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')intentarLogin()">
+      <div class="input-wrap">
+        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')intentarLogin()">
+        <button class="show-btn" type="button" onclick="toggleShow('loginPass', this)" tabindex="-1">👁️</button>
+      </div>
     </div>
     <div class="login-error" id="loginError">❌ Usuario o contraseña incorrectos</div>
     <button class="login-btn" onclick="intentarLogin()">Entrar →</button>
@@ -515,7 +525,11 @@ function renderTabla(data) {
       </div></td>
     </tr>
   `).join('');
-  document.getElementById('tablaContainer').innerHTML=`<table><thead><tr><th>#</th><th>Concepto</th><th>Entorno</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table>`;
+  document.getElementById('tablaContainer').innerHTML=`
+    <div class="tabla-hint">← Desliza para ver más →</div>
+    <div class="tabla-scroll">
+      <table><thead><tr><th>#</th><th>Concepto</th><th>Entorno</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Fecha</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
 }
 
 /* ── Modal ── */
@@ -593,6 +607,13 @@ function toast(msg,error=false){
 
 actualizarCategorias();
 setInterval(()=>{if(sessionStorage.getItem('fernando_auth'))cargarDatos()},60000);
+
+function toggleShow(id, btn) {
+  const input = document.getElementById(id);
+  const showing = input.type === 'text';
+  input.type = showing ? 'password' : 'text';
+  btn.textContent = showing ? '👁️' : '🙈';
+}
 </script>
 </body>
 </html>
